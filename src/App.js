@@ -93,8 +93,7 @@ function App() {
   },[counter]);
 
   const generateQrCode = useCallback(() => {
-    refreshQrCode();
-    setCounter(INTERVAL);
+    setCounter(0);
   },[]);
 
   const userIdOnChange = useCallback((event) => {
