@@ -25,19 +25,21 @@ function App() {
   const DEFAULT_USER_ID = "123456";
 
   const [userId, setUserId] = useState(DEFAULT_USER_ID);
-  const [time, setTime] = useState("");
-  const [counter, setCounter] = useState(INTERVAL);
+  const [time, setTime] = useState(new Date());
+  const [startTime, setStartTime] = useState(new Date());
+  const [counter, setCounter] = useState(0);
   const [originalText, setOriginalText] = useState("");
   const [encryptedText, setEncryptedText] = useState("");
 
   useEffect(() => {
+    // initialize timer with worldtimeapi
     getServerTime()
       .then((serverTime) => {
         if (serverTime == null)
           throw new Error("Cannot fetch time from worldtimeapi");
         
         // set time as server time
-        setTime(serverTime.toISOString());
+        setTime(serverTime);
 
         // initialize QR code
         const encryptedTextStr = encrypt.encrypt(`${DEFAULT_USER_ID},${serverTime.toISOString().substring(0, serverTime.toISOString().length - 5)}Z`);
@@ -47,54 +49,34 @@ function App() {
         alert(err);
       });
     
+    setStartTime(new Date());
     setInterval(() => {
-      // Set Time
-      setTime((prevTime) => {
-        const currentTime = new Date(prevTime);
-        currentTime.setSeconds(currentTime.getSeconds() + 1);
-        return currentTime.toISOString();
-      });
-
-      // Set counter
-      setCounter(prevCounter => {
-        if (prevCounter > 0)
-          return prevCounter - 1
-        else
-          return INTERVAL;
-      });
-    }, 1000);
+      const diff = Date.now() - startTime;
+      const diffInSeconds = Math.floor(diff / 1000);
+      setCounter(diffInSeconds);
+    }, 100);
   }, []);
 
   const refreshQrCode = useCallback(() => {
-    const encryptedTextStr = encrypt.encrypt(`${userId},${time.substring(0, time.length - 5)}Z`);
+    const encryptedTextStr = encrypt.encrypt(`${userId},${time.toISOString().substring(0, time.toISOString().length - 5)}Z`);
 
     if (encryptedTextStr === false) {
       alert('Invalid Public Key');
       return;
     }
-    setOriginalText(`${userId},${time.substring(0, time.length - 5)}Z`);
+    setOriginalText(`${userId},${time.toISOString().substring(0, time.toISOString().length - 5)}Z`);
     setEncryptedText(encryptedTextStr);
   },[userId, time]);
 
   useEffect(() => {
-    // if interval has passed
-    if (counter === 0) {
-      // sync time with worldtimeapi
-      getServerTime()
-        .then((serverTime) => {
-          if (serverTime == null)
-            throw new Error("Cannot fetch time from worldtimeapi")
-          setTime(serverTime.toISOString());
-          refreshQrCode();  // and refresh QR code again
-        }).catch(err => {
-          alert(err);
-        });
-    }
-  },[counter]);
+    setTime((prevTime) => {
+      return new Date(prevTime.getTime() + 1000);
+    });
 
-  const generateQrCode = useCallback(() => {
-    setCounter(0);
-  },[]);
+    if (counter % INTERVAL === 0) { // if it's an interval cycle
+      refreshQrCode();
+    }
+  }, [counter]);
 
   const userIdOnChange = useCallback((event) => {
     setUserId(event.target.value);
@@ -112,10 +94,15 @@ function App() {
             <input type="text" value={userId} onChange={userIdOnChange}/>
 
             <div className="label">Current UTC Time (sync with worldtimeapi.org)</div>
-            <div>{`${time.substring(0, time.length - 5)}Z`}</div> 
+            { 
+              time != null &&
+              (
+                <div>{`${time.toISOString().substring(0, time.toISOString().length - 5)}Z`}</div> 
+              )
+            }
 
             <div>
-              <Button variant="primary" id="refresh-btn" onClick={generateQrCode}>Generate</Button>
+              <Button variant="primary" id="refresh-btn" onClick={refreshQrCode}>Refresh</Button>
             </div>
           </div>  
           
@@ -131,7 +118,7 @@ function App() {
                   <div className="label">Original Text</div>
                   <div>{originalText}</div> 
 
-                  <div className="label">QR Code (Auto refresh after {counter} seconds)</div>
+                  <div className="label">QR Code (Auto refresh after {INTERVAL - counter % INTERVAL} seconds)</div>
                   <div id="qr-code-wrapper">
                     <QRCode value={encryptedText} />
                   </div>
